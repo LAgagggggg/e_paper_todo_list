@@ -18,17 +18,18 @@
 #include <ArduinoJson.h>
 #include <HTTPClient.h>
 
-#define BATT_PIN            36
-#define FETCH_INTERVAL 1800000 // 30 minutes
-
-uint8_t *framebuffer;
 int vref = 1100;
+
+#define BATT_PIN            36
+#define FETCH_INTERVAL 1800000 // ms, == 30 minutes
+
+RTC_DATA_ATTR int bootCount = 0;
 
 const char* ssid     = "AssKicker";     // WiFi SSID to connect to
 const char* password = "19970720cool"; // WiFi password needed for the SSID
 
 DynamicJsonDocument jsonDoc(1024);
-bool todoNeedRefresh = false;
+bool todoNeedRefresh = true;
 String lastTimeTodoContentString = "";
 
 Rect_t lastTodoListArea = {
@@ -41,7 +42,18 @@ Rect_t lastTodoListArea = {
 void setup()
 {
   Serial.begin(115200);
+  initDisplay();
+  refreshTodo();
+  delay(FETCH_INTERVAL);
+}
 
+void loop()
+{
+  refreshTodo();
+  delay(FETCH_INTERVAL);
+}
+
+void initDisplay() {
   // Correct the ADC reference voltage
   esp_adc_cal_characteristics_t adc_chars;
   esp_adc_cal_value_t val_type = esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_DB_11, ADC_WIDTH_BIT_12, 1100, &adc_chars);
@@ -51,37 +63,15 @@ void setup()
   }
 
   epd_init();
-
-  framebuffer = (uint8_t *)ps_calloc(sizeof(uint8_t), EPD_WIDTH * EPD_HEIGHT);
-  if (!framebuffer) {
-    Serial.println("alloc memory failed !!!");
-    while (1);
-  }
-  memset(framebuffer, 0xFF, EPD_WIDTH * EPD_HEIGHT / 2);
-
   epd_poweron();
   epd_clear();
-  epd_poweroff();
 
-
-  int cursor_x = 50;
-  int cursor_y = 50;
-  
-  epd_poweron();
-  fetchTodoList();
-
+  int initX = 50, initY = 50;
   char * todoTitle = "TODO: ";
-  writeln((GFXfont *)&FiraSans, todoTitle, &cursor_x, &cursor_y, NULL);
-  delay(500);
-  drawTodoList(jsonDoc.as<JsonArray>(), 50, 100);
-  drawBatteryInfo();
-
-  epd_poweroff_all();
-  delay(FETCH_INTERVAL);
+  writeln((GFXfont *)&FiraSans, todoTitle, &initX, &initY, NULL);
 }
 
-void loop()
-{
+void refreshTodo() {
   // When reading the battery voltage, POWER_EN must be turned on
   epd_poweron();
   fetchTodoList();
@@ -96,7 +86,6 @@ void loop()
   drawBatteryInfo();
 
   epd_poweroff_all();
-  delay(FETCH_INTERVAL);
 }
 
 uint8_t startWiFi() {
