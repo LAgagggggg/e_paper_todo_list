@@ -19,11 +19,7 @@
 #include <HTTPClient.h>
 
 #define BATT_PIN            36
-#define SD_MISO             12
-#define SD_MOSI             13
-#define SD_SCLK             14
-#define SD_CS               15
-#define FETCH_INTERVAL 600000 // 10 minutes
+#define FETCH_INTERVAL 1800000 // 30 minutes
 
 uint8_t *framebuffer;
 int vref = 1100;
@@ -31,16 +27,16 @@ int vref = 1100;
 const char* ssid     = "AssKicker";     // WiFi SSID to connect to
 const char* password = "19970720cool"; // WiFi password needed for the SSID
 
+DynamicJsonDocument jsonDoc(1024);
+bool todoNeedRefresh = false;
+String lastTimeTodoContentString = "";
+
 Rect_t lastTodoListArea = {
         .x = 0,
         .y = 0,
         .width = 0,
         .height = 0,
 };
-
-DynamicJsonDocument jsonDoc(50 * 1024);
-bool todoNeedRefresh = false;
-String lastTimeTodoContentString = "";
 
 void setup()
 {
@@ -204,9 +200,9 @@ void drawTodoList(JsonArray todoList, int initX, int initY) {
   todoNeedRefresh = false;
   lastTodoListArea = {
         .x = initX,
-        .y = initY - 50,
+        .y = initY - 30,
         .width = maxX - initX,
-        .height = cursorY - initY + 50,
+        .height = cursorY - initY + 30,
   };
 }
 
