@@ -23,6 +23,10 @@ int vref = 1100;
 #define BATT_PIN            36
 #define FETCH_INTERVAL 1800000 // ms, == 30 minutes
 
+#define ENABLE_DEEP_SLEEP 1
+#define uS_TO_S_FACTOR 1000000ULL  /* Conversion factor for micro seconds to seconds */
+#define TIME_TO_SLEEP  1800        /* Time ESP32 will go to sleep (in seconds) */
+
 RTC_DATA_ATTR int bootCount = 0;
 
 const char* ssid     = "AssKicker";     // WiFi SSID to connect to
@@ -42,8 +46,23 @@ Rect_t lastTodoListArea = {
 void setup()
 {
   Serial.begin(115200);
+
+#if ENABLE_DEEP_SLEEP
+  esp_sleep_enable_timer_wakeup(TIME_TO_SLEEP * uS_TO_S_FACTOR);
+  Serial.println("Setup ESP32 to sleep for every " + String(TIME_TO_SLEEP) +
+  " Seconds");
+#endif
+  
   initDisplay();
   refreshTodo();
+
+#if ENABLE_DEEP_SLEEP
+  Serial.println("Going to sleep now");
+  Serial.flush(); 
+  esp_deep_sleep_start();
+  Serial.println("This will never be printed");
+#endif
+  
   delay(FETCH_INTERVAL);
 }
 
@@ -91,10 +110,10 @@ void refreshTodo() {
 uint8_t startWiFi() {
   Serial.print("\r\nConnecting to: "); Serial.println(String(ssid));
   IPAddress dns(8, 8, 8, 8); // Google DNS
-//  WiFi.disconnect();
+  WiFi.disconnect();
   WiFi.mode(WIFI_STA); // switch off AP
-  WiFi.setAutoConnect(true);
-  WiFi.setAutoReconnect(true);
+//  WiFi.setAutoConnect(true);
+//  WiFi.setAutoReconnect(true);
   WiFi.begin(ssid, password);
   unsigned long start = millis();
   uint8_t connectionStatus;
@@ -120,7 +139,7 @@ uint8_t startWiFi() {
 void stopWiFi() {
   WiFi.disconnect();
   Serial.println("WiFi disconnected");
-  WiFi.mode(WIFI_OFF);
+//  WiFi.mode(WIFI_OFF);
 }
 
 void fetchTodoList() {
@@ -153,8 +172,8 @@ void fetchTodoList() {
       client.stop();
       http.end();
     }
-//    stopWiFi();
   }
+  stopWiFi();
 }
 
 void decodeTodoList(String json) {
