@@ -25,12 +25,20 @@ int vref = 1100;
 
 #define ENABLE_DEEP_SLEEP 1
 #define uS_TO_S_FACTOR 1000000ULL  /* Conversion factor for micro seconds to seconds */
-#define TIME_TO_SLEEP  1800        /* Time ESP32 will go to sleep (in seconds) */
+#define uS_TO_MIN_FACTOR 60000000ULL  /* Conversion factor for micro seconds to seconds */
+#define TIME_TO_SLEEP  1200        /* Time ESP32 will go to sleep (in seconds) */
 
 RTC_DATA_ATTR int bootCount = 0;
 
 const char* ssid     = "AssKicker";     // WiFi SSID to connect to
 const char* password = "19970720cool"; // WiFi password needed for the SSID
+
+const char* ntpServer = "0.asia.pool.ntp.org";
+const long  gmtOffset_sec = 28800; // +8
+const int   daylightOffset_sec = 0;
+int currentHour = -1;
+int currentMin  = -1;
+int sleepHour = 1, wakeHour = 8;
 
 DynamicJsonDocument jsonDoc(1024);
 bool todoNeedRefresh = true;
@@ -46,17 +54,19 @@ Rect_t lastTodoListArea = {
 void setup()
 {
   Serial.begin(115200);
-
-#if ENABLE_DEEP_SLEEP
-  esp_sleep_enable_timer_wakeup(TIME_TO_SLEEP * uS_TO_S_FACTOR);
-  Serial.println("Setup ESP32 to sleep for every " + String(TIME_TO_SLEEP) +
-  " Seconds");
-#endif
   
   initDisplay();
   refreshTodo();
 
 #if ENABLE_DEEP_SLEEP
+  uint64_t time_to_sleep = TIME_TO_SLEEP * uS_TO_S_FACTOR; // Normal sleep time
+  if (currentHour >= sleepHour && currentHour < wakeHour) { // Night sleep time
+    time_to_sleep = ((wakeHour - currentHour) * 60 - currentMin) * uS_TO_MIN_FACTOR;
+  }
+  esp_sleep_enable_timer_wakeup(time_to_sleep);
+  Serial.println("Setup ESP32 to sleep for " + String((int)(time_to_sleep/uS_TO_S_FACTOR)) +
+  " Seconds");
+  
   Serial.println("Going to sleep now");
   Serial.flush(); 
   esp_deep_sleep_start();
@@ -101,7 +111,8 @@ void refreshTodo() {
   else {
     Serial.println("Same content, no need of refresh.");
   }
-  
+
+  getAndDrawTime();
   drawBatteryInfo();
 
   epd_poweroff_all();
@@ -173,7 +184,7 @@ void fetchTodoList() {
       http.end();
     }
   }
-  stopWiFi();
+//  stopWiFi();
 }
 
 void decodeTodoList(String json) {
@@ -218,17 +229,52 @@ void drawBatteryInfo() {
   uint16_t v = analogRead(BATT_PIN);
   float battery_voltage = ((float)v / 4095.0) * 2.0 * 3.3 * (vref / 1000.0);
   String voltage = "🚀 Vol:" + String(battery_voltage) + "V";
-//  Serial.println(voltage);
+  Serial.println(voltage);
 
+#if ENABLE_DEEP_SLEEP
+#else
   Rect_t area = {
     .x = 700,
     .y = 480,
     .width = 240,
     .height = 50,
   };
+  epd_clear_area(area);
+#endif
 
   int cursor_x = 720;
   int cursor_y = 520;
-  epd_clear_area(area);
   writeln((GFXfont *)&FiraSans, (char *)voltage.c_str(), &cursor_x, &cursor_y, NULL);
+}
+
+void getAndDrawTime() {
+  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+  struct tm timeinfo;
+  if(!getLocalTime(&timeinfo)){
+    Serial.println("Failed to obtain time");
+    currentHour = -1;
+    currentMin  = -1;
+    return;
+  }
+  Serial.println(&timeinfo, "%A, %B %d %Y %H:%M:%S");
+  currentHour = timeinfo.tm_hour;
+  currentMin  = timeinfo.tm_min;
+
+  char timeString[30];
+  strftime(timeString, sizeof(timeString), "✎ updated at: %H:%M", &timeinfo);  // Creates: '14:05:49'
+
+#if ENABLE_DEEP_SLEEP
+#else
+  Rect_t area = {
+    .x = 40,
+    .y = 480,
+    .width = 400,
+    .height = 50,
+  };
+  epd_clear_area(area);
+#endif
+
+  int cursor_x = 50;
+  int cursor_y = 520;
+  writeln((GFXfont *)&FiraSans, timeString, &cursor_x, &cursor_y, NULL);
 }
