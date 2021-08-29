@@ -33,12 +33,12 @@ RTC_DATA_ATTR int bootCount = 0;
 const char* ssid     = "AssKicker";     // WiFi SSID to connect to
 const char* password = "19970720cool"; // WiFi password needed for the SSID
 
-const char* ntpServer = "0.asia.pool.ntp.org";
+const char* ntpServer = "ntp.aliyun.com";
 const long  gmtOffset_sec = 28800; // +8
 const int   daylightOffset_sec = 0;
 int currentHour = -1;
 int currentMin  = -1;
-int sleepHour = 1, wakeHour = 8;
+int sleepHour = 0, wakeHour = 8;
 
 DynamicJsonDocument jsonDoc(1024);
 bool todoNeedRefresh = true;
@@ -106,7 +106,8 @@ void refreshTodo() {
   fetchTodoList();
 
   if (todoNeedRefresh) {
-    drawTodoList(jsonDoc.as<JsonArray>(), 50, 100);
+    drawStringArray(jsonDoc.as<JsonObject>()["todos"], 50, 100, "➠ ");
+    drawStringArray(jsonDoc.as<JsonObject>()["other"], 550, 50, "✭ ");
   }
   else {
     Serial.println("Same content, no need of refresh.");
@@ -160,10 +161,11 @@ void fetchTodoList() {
     HTTPClient http;
     String server = "code.lagagggggg.cn";
     int port = 5556;
-    String uri = "/todo_list";
+    String uri = "/todo_list_with_other_info";
 
     Serial.println("Begin fetching todo list\n");
     http.begin(client, server, port, uri);
+    http.setTimeout(10000);
     int httpCode = http.GET();
     if (httpCode == HTTP_CODE_OK) {
       String content = http.getString();
@@ -179,7 +181,7 @@ void fetchTodoList() {
     }
     else
     {
-      Serial.printf("connection failed, error: %s", http.errorToString(httpCode).c_str());
+      Serial.printf("connection failed, error: %s\n", http.errorToString(httpCode).c_str());
       client.stop();
       http.end();
     }
@@ -201,28 +203,28 @@ void decodeTodoList(String json) {
   }
 }
 
-void drawTodoList(JsonArray todoList, int initX, int initY) {
-    epd_clear_area(lastTodoListArea);
+void drawStringArray(JsonArray stringArray, int initX, int initY, String prefix) {
+//  epd_clear_area(lastTodoListArea);
   int cursorX = initX;
   int cursorY = initY;
   int maxX = 0;
-  for (JsonVariant value : todoList) {
-    String s = "➠ " + value.as<String>();
+  for (JsonVariant value : stringArray) {
+    String s = prefix + value.as<String>();
     Serial.printf("draw todo: %s\n", s.c_str());
     writeln((GFXfont *)&FiraSans, (char *)s.c_str(), &cursorX, &cursorY, NULL);
-    delay(500);
+    delay(100);
     maxX = maxX >= cursorX ? maxX : cursorX;
     cursorX = initX;
     cursorY += 50;
   }
 
   todoNeedRefresh = false;
-  lastTodoListArea = {
-        .x = initX,
-        .y = initY - 30,
-        .width = maxX - initX,
-        .height = cursorY - initY + 30,
-  };
+//  lastTodoListArea = {
+//        .x = initX,
+//        .y = initY - 30,
+//        .width = maxX - initX,
+//        .height = cursorY - initY + 30,
+//  };
 }
 
 void drawBatteryInfo() {
